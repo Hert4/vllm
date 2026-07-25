@@ -20,9 +20,37 @@ if _T:
         WT = scalar_types.uint8b128 if os.environ.get("VLLM_MACHETE_BITS", "4") == "8" else scalar_types.uint4b8
         GS = int(os.environ.get("VLLM_MACHETE_GS", "128"))
 
+        _MATCHED = {t: 0 for t in _T}
+        _REPORTED = [False]
+
         def _is_t(layer):
             p = getattr(layer, "prefix", "") or ""
-            return any(t in p for t in _T)
+            for t in _T:
+                if t in p:
+                    _MATCHED[t] += 1
+                    return True
+            return False
+
+        def _report_once():
+            """Report per-target coverage on the first forward (all weights are loaded by then).
+
+            A target that matches zero layers means another quantization method already claimed
+            them (e.g. --quantization=fp8 installs Fp8LinearMethod, which this hook never sees),
+            so the run silently uses that method instead of int4. Warn loudly rather than let a
+            benchmark report int4 numbers for weights that were never quantized.
+            """
+            if _REPORTED[0]:
+                return
+            _REPORTED[0] = True
+            print(f"[machete_rtn] coverage: {_MATCHED}", flush=True)
+            missing = [t for t in _T if _MATCHED[t] == 0]
+            if missing:
+                print(
+                    f"[machete_rtn] WARNING: targets matched 0 layers: {missing}. These weights "
+                    "are NOT int4 -- another quantization method (e.g. --quantization=fp8) owns "
+                    "them. Drop that flag if you intended int4 for these layers.",
+                    flush=True,
+                )
 
         def _mk_machete(w):
             # w: [out, in] bf16 -> machete int4 buffers (wq_m, scales, gs)
@@ -57,6 +85,7 @@ if _T:
             print(f"[machete_rtn] quantized {getattr(layer,'prefix','?')}", flush=True)
 
         def _lin_apply(self, layer, x, bias=None):
+            _report_once()
             m = getattr(layer, "_machete", None)
             if m is None:
                 return _oa(self, layer, x, bias)
@@ -73,6 +102,7 @@ if _T:
         _ea = UnquantizedEmbeddingMethod.apply
 
         def _emb_apply(self, layer, x, bias=None):
+            _report_once()
             if not _LM:
                 return _ea(self, layer, x, bias)
             m = getattr(layer, "_machete_lm", None)
@@ -87,6 +117,10 @@ if _T:
 
         print(f"[machete_rtn] PATCH v2 APPLIED targets={_T} GS={GS} bits={'8' if WT==scalar_types.uint8b128 else '4'}", flush=True)
     except Exception as e:
+        # Fail closed: the hook was explicitly requested via VLLM_MACHETE_RTN, so continuing with
+        # unpatched (unquantized) methods would silently invalidate any int4 benchmark or memory
+        # measurement taken from this run.
         import traceback
         print("[machete_rtn] FAIL:", e)
         traceback.print_exc()
+        raise
