@@ -51,3 +51,29 @@ Byte/step: 1079 MB (kèm fp8) so với 627 MB (không kèm).
 ## Giấy phép
 
 Tệp bắt nguồn từ vLLM giữ nguyên giấy phép Apache-2.0 của dự án.
+
+## Khác biệt so với image đã ship
+
+Nhánh này **không** giống image `:r2v18` từng byte. Ba thay đổi, đều theo review, đều không đổi
+hành vi khi `VLLM_MACHETE_RTN` được set (tức là mọi lần chạy thi):
+
+1. `vllm/__init__.py` — bọc `import machete_rtn` trong điều kiện `VLLM_MACHETE_RTN` được set.
+   Image ship bản không điều kiện, nên `import vllm` từ wheel bình thường (không có
+   `machete_rtn.py`) sẽ in `machete_rtn import err ...` ra stdout.
+2. `machete_rtn.py` — `except` khi khởi tạo giờ `raise` lại sau khi log. Bản ship chỉ in rồi chạy
+   tiếp với method chưa vá, nghĩa là một lần chạy khai là int4 có thể âm thầm chạy bf16/fp8 mà
+   benchmark vẫn ra số bình thường.
+3. `machete_rtn.py` — thêm báo cáo độ phủ theo từng target ở lần forward đầu tiên, và cảnh báo to
+   khi một target khớp 0 layer.
+
+Điểm 3 sinh ra từ một lỗi có thật: cấu hình thi chạy
+`VLLM_MACHETE_RTN=feed_forward.w,self_attn.,conv.in_proj,conv.out_proj,lm_head` **kèm**
+`--quantization=fp8` suốt nhiều tuần, tin rằng mình đang chạy "int4-everything". Thực tế
+`feed_forward.w` và `self_attn.` khớp 0 layer (đã bị `Fp8LinearMethod` chiếm) nên MLP — 75% lưu
+lượng weight — chạy fp8. Không có lỗi nào được ném ra, không có cảnh báo nào, số benchmark trông
+hoàn toàn hợp lý. Với bản vá này log sẽ in thẳng:
+
+```
+[machete_rtn] coverage: {'feed_forward.w': 0, 'self_attn.': 0, 'conv.in_proj': 10, 'conv.out_proj': 10, 'lm_head': 0}
+[machete_rtn] WARNING: targets matched 0 layers: ['feed_forward.w', 'self_attn.'] ...
+```
