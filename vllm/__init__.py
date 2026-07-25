@@ -107,7 +107,8 @@ __all__ = [
 import os as _os
 
 if _os.environ.get("VLLM_MACHETE_RTN"):
-    try:
-        import machete_rtn  # noqa: F401
-    except Exception as _e:
-        print("machete_rtn import err", _e)
+    # Opt-in path: do NOT suppress failures. If the module is missing (it is not packaged by
+    # pyproject.toml, only the custom Docker image copies it in) or its setup raises, a silent
+    # fallback would run bf16/fp8 while the job is configured as int4 -- the benchmark would look
+    # valid while measuring the wrong thing. Fail the import instead.
+    import machete_rtn  # noqa: F401
