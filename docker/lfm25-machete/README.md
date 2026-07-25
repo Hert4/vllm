@@ -57,9 +57,10 @@ Tệp bắt nguồn từ vLLM giữ nguyên giấy phép Apache-2.0 của dự �
 Nhánh này **không** giống image `:r2v18` từng byte. Ba thay đổi, đều theo review, đều không đổi
 hành vi khi `VLLM_MACHETE_RTN` được set (tức là mọi lần chạy thi):
 
-1. `vllm/__init__.py` — bọc `import machete_rtn` trong điều kiện `VLLM_MACHETE_RTN` được set.
-   Image ship bản không điều kiện, nên `import vllm` từ wheel bình thường (không có
-   `machete_rtn.py`) sẽ in `machete_rtn import err ...` ra stdout.
+1. `vllm/__init__.py` — `import machete_rtn` chỉ chạy khi `VLLM_MACHETE_RTN` được set, và
+   **không** bọc `try/except`. Image ship bản không điều kiện có bắt lỗi, nên: (a) `import vllm`
+   từ wheel bình thường (không có `machete_rtn.py`) in `machete_rtn import err ...` ra stdout, và
+   (b) khi đã opt-in mà module hỏng thì vẫn chạy tiếp với method chưa vá.
 2. `machete_rtn.py` — `except` khi khởi tạo giờ `raise` lại sau khi log. Bản ship chỉ in rồi chạy
    tiếp với method chưa vá, nghĩa là một lần chạy khai là int4 có thể âm thầm chạy bf16/fp8 mà
    benchmark vẫn ra số bình thường.
