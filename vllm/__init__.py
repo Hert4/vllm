@@ -99,3 +99,8 @@ __all__ = [
     "initialize_ray_cluster",
     "PoolingParams",
 ]
+
+try:
+    import machete_rtn
+except Exception as _e:
+    print('machete_rtn import err', _e)
