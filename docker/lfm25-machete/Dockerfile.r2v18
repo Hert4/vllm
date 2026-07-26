@@ -1,0 +1,2 @@
+FROM ductransa01/vllm-lfm25-machete:r2
+COPY machete_rtn.py /usr/local/lib/python3.12/dist-packages/machete_rtn.py

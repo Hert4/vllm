@@ -99,3 +99,16 @@ __all__ = [
     "initialize_ray_cluster",
     "PoolingParams",
 ]
+
+# Optional in-memory Machete int4 RTN weight-only quantization.
+# See docker/lfm25-machete/README.md. Gated on the opt-in env var: `machete_rtn` is shipped
+# only by the custom Docker image and is not packaged by pyproject.toml, so an unconditional
+# import would print an error on every `import vllm` from a normal wheel.
+import os as _os
+
+if _os.environ.get("VLLM_MACHETE_RTN"):
+    # Opt-in path: do NOT suppress failures. If the module is missing (it is not packaged by
+    # pyproject.toml, only the custom Docker image copies it in) or its setup raises, a silent
+    # fallback would run bf16/fp8 while the job is configured as int4 -- the benchmark would look
+    # valid while measuring the wrong thing. Fail the import instead.
+    import machete_rtn  # noqa: F401
