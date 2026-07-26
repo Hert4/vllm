@@ -21,7 +21,6 @@ if _T:
         GS = int(os.environ.get("VLLM_MACHETE_GS", "128"))
 
         _MATCHED = {t: 0 for t in _T}
-        _REPORTED = [False]
 
         def _is_t(layer):
             p = getattr(layer, "prefix", "") or ""
@@ -31,17 +30,18 @@ if _T:
                     return True
             return False
 
-        def _report_once():
-            """Report per-target coverage on the first forward (all weights are loaded by then).
+        def _report():
+            """Report per-target coverage during weight loading (outside any traced region).
+
+            MUST NOT be called from apply(): that runs inside the torch.compile/CUDA-graph
+            captured region, where a Python side effect such as print() breaks capture
+            ("User compiler error" from vllm/compilation/cuda_graph.py on vLLM 0.26.0).
 
             A target that matches zero layers means another quantization method already claimed
             them (e.g. --quantization=fp8 installs Fp8LinearMethod, which this hook never sees),
             so the run silently uses that method instead of int4. Warn loudly rather than let a
             benchmark report int4 numbers for weights that were never quantized.
             """
-            if _REPORTED[0]:
-                return
-            _REPORTED[0] = True
             print(f"[machete_rtn] coverage: {_MATCHED}", flush=True)
             missing = [t for t in _T if _MATCHED[t] == 0]
             if missing:
@@ -83,9 +83,9 @@ if _T:
             layer.weight = torch.nn.Parameter(torch.empty(0, device=w.device, dtype=w.dtype),
                                               requires_grad=False)
             print(f"[machete_rtn] quantized {getattr(layer,'prefix','?')}", flush=True)
+            _report()
 
         def _lin_apply(self, layer, x, bias=None):
-            _report_once()
             m = getattr(layer, "_machete", None)
             if m is None:
                 return _oa(self, layer, x, bias)
@@ -102,7 +102,6 @@ if _T:
         _ea = UnquantizedEmbeddingMethod.apply
 
         def _emb_apply(self, layer, x, bias=None):
-            _report_once()
             if not _LM:
                 return _ea(self, layer, x, bias)
             m = getattr(layer, "_machete_lm", None)
