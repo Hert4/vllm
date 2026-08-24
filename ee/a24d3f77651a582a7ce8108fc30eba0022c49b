@@ -1,0 +1,20 @@
+vllm/renderers/base.py
+  s_f88d94db844ac9::t_4fefc16d5041d3 521-533
+  s_f88d94db844ac9::t_f5be007ca31148 534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "eea24d3f77651a582a7ce8108fc30eba0022c49b",
+  "prompts": {},
+  "sessions": {
+    "s_f88d94db844ac9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1fd89b28-5405-4b21-95ff-d42fe5e5288b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "tmduc3 <tmduc3@rd.misa.com.vn>"
+    }
+  }
+}
